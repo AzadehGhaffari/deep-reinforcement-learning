@@ -15,13 +15,26 @@ states = ['A', 'B', 'C']    # example states
 for s in states:
     V[s] = 0.0   # initialize values
 
+print("Initial state values:")
+print(V)
+
 # Simulate starting at state s, moving to s_next, and receiving reward r
 s = 'A'
 s_next = 'B'
 r = 1.0
 
+print(f"\nObserved transition: {s} -> {s_next}, reward={r}")
+
 # TD(0) update
-V[s] = V[s] + alpha * (r + gamma * V[s_next] - V[s])
+td_target = r + gamma * V[s_next]
+td_error = td_target - V[s]
+V[s] = V[s] + alpha * td_error
+
+print(f"TD target = reward + gamma * V[next_state] = {r} + {gamma} * {V[s_next]} = {td_target}")
+print(f"TD error = TD target - V[{s}] = {td_target} - 0.0 = {td_error}")
+print(f"Updated V[{s}] = {V[s]}")
+print("\nFinal state values:")
+print(V)
 
 #############################  EXPLANATION ###############
 
