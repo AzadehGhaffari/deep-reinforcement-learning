@@ -1,175 +1,228 @@
-# Deep Reinforcement Learning Notes
+# Real-Time EV Battery Health & Charging Optimization Agent
 
-Short study notes for the DRL course examples. The code files are examples; the main goal is to understand what each algorithm is trying to learn.
+This project is an academic simulation that combines a PyTorch battery-health model with a Deep Q-Network (DQN) agent to demonstrate a closed-loop battery-management workflow on public NASA lithium-ion aging data.
 
-This README currently covers the foundations from modules 1 and 2. It is organized so later modules can be added as separate sections without rewriting the earlier notes.
+It is not a real battery-management system and must not be presented as safe for use on a physical EV battery.
 
-## Table of Contents
+## Business Problem
 
-- [How To Use This README](#how-to-use-this-readme)
-- [Module 1: Reinforcement Learning Foundations](#module-1-reinforcement-learning-foundations)
-- [Module 2: Prediction and Control Methods](#module-2-prediction-and-control-methods)
-- [Notes About These Course Examples](#notes-about-these-course-examples)
+EV batteries face a trade-off between fast charging, thermal stress, and long-term degradation. The project goal is to simulate a controller that does more than predict battery health: it should estimate battery condition from historical experimental measurements, choose a charging or operating action, simulate the effect of that action, and repeat that loop in near real time.
 
-## How To Use This README
+## Approach
 
-Each module section should include:
+The project uses two connected learning components:
 
-- the main concepts introduced in that module
-- the files or examples that belong to it
-- a quick comparison table when there are several related algorithms
-- notes about any simplifications or quirks in the course code
+- A PyTorch GRU model estimates state of health (SOH) and degradation risk from time-series battery measurements.
+- A PyTorch DQN agent observes the current battery state and chooses one of five discrete actions.
 
-When adding a new module, create a new `## Module N: Title` section and add it to the table of contents.
+Recommended background reading for the report and presentation:
 
-## Module 1: Reinforcement Learning Foundations
+- NASA DASHLINK Li-ion Battery Aging Dataset: https://c3.ndc.nasa.gov/dashlink/resources/133/
+- Mnih et al., Human-level control through deep reinforcement learning
+- Battery prognostics / SOH papers that use the NASA PCoE cells
+- Safe or constrained RL papers for energy systems, charging, or control under operating limits
 
-Module 1 introduces the basic RL vocabulary and learning loop.
+## Methodology
 
-### Main RL Loop
+1. Place NASA `.mat` battery files in `data/raw/`.
+2. Parse charge and discharge cycles into tabular time-series records.
+3. Engineer SOC, trend features, SOH proxy values, and degradation-risk targets.
+4. Train a PyTorch GRU battery-health model.
+5. Build a custom Gymnasium-compatible environment around replayed historical measurements.
+6. Train a DQN agent with replay buffer, target network, and epsilon-greedy exploration.
+7. Compare the DQN against fixed and rule-based policies.
+8. Visualize the closed loop in a Streamlit dashboard.
 
-```mermaid
-flowchart LR
-    A[State] --> B[Choose action]
-    B --> C[Environment responds]
-    C --> D[Reward]
-    C --> E[Next state]
-    D --> F[Update value estimate]
-    E --> F
-    F --> A
-```
-
-The important idea: in a real RL environment, the action should affect what next state happens. Some course examples are simplified, so they show the formula even if the action does not really control the transition.
-
-### Core Vocabulary
-
-```text
-Agent:       the learner or decision-maker
-Environment: the system the agent interacts with
-State:       what the agent observes about the situation
-Action:      what the agent chooses to do
-Reward:      feedback signal from the environment
-Policy:      the rule the agent uses to choose actions
-Value:       estimate of how good a state or action is
-```
-
-## Module 2: Prediction and Control Methods
-
-Module 2 connects the Bellman idea to practical value-estimation and control methods.
-
-### Run Commands
-
-Use the local virtual environment:
-
-```powershell
-.\.venv\Scripts\python.exe .\module2\bellman_9489.py
-.\.venv\Scripts\python.exe .\module2\montecarlo_4857.py
-.\.venv\Scripts\python.exe .\module2\temporaldifference_7016.py
-.\.venv\Scripts\python.exe .\module2\sarsa-qlearning_4747.py
-.\.venv\Scripts\python.exe .\module2\samplecode_2934.py
-```
-
-If the environment is missing, create it and install the TorchRL dependencies:
-
-```powershell
-C:/Users/azadeh.ghaffari/AppData/Local/Programs/Python/Python313/python.exe -m venv .venv
-.\.venv\Scripts\python.exe -m pip install --upgrade pip
-.\.venv\Scripts\python.exe -m pip install torch torchrl 'gymnasium[classic-control]'
-```
-
-### Algorithm Map
+## Pipeline
 
 ```mermaid
 flowchart TD
-    A[Bellman idea: reward now + future value] --> B[Monte Carlo]
-    A --> C[TD 0]
-    B --> D[n-step TD]
-    C --> D
-    C --> E[SARSA]
-    C --> F[Q-learning]
-    F --> G[DQN / TorchRL CartPole]
-
-    B --> B1[Wait until episode ends]
-    C --> C1[Update after one step]
-    D --> D1[Update after a few steps]
-    E --> E1[Use actual next action]
-    F --> F1[Use best next action]
-    G --> G1[Use neural network instead of Q-table]
+    A[NASA Experimental Battery Data] --> B[Preprocessing]
+    B --> C[Real-time Stream Simulator]
+    C --> D[Feature Extraction]
+    D --> E[PyTorch GRU Health Model]
+    E --> F[Battery State]
+    F --> G[DQN Agent]
+    G --> H[Charging or Operating Action]
+    H --> I[BatteryChargingEnv Simulation]
+    I --> J[Updated Battery State]
+    J --> C
 ```
 
-### Quick Comparison
-
-| File | Algorithm | Learns | When it updates | Key idea |
-|---|---|---|---|---|
-| `bellman_9489.py` | Bellman update | `V(state)` | one update pass | value = reward now + discounted next value |
-| `montecarlo_4857.py` | Monte Carlo | `V(state)` | after full episode | average total returns from complete runs |
-| `temporaldifference_7016.py` | TD(0) | `V(state)` | after one step | reward now + estimated next-state value |
-| `n-step_9169.py` | n-step TD | `V(state)` | after `n` steps | middle between TD and Monte Carlo |
-| `sarsa-qlearning_4747.py` | SARSA / Q-learning | `Q(state, action)` | after each step | actual next action vs best next action |
-| `samplecode_2934.py` | DQN with TorchRL | neural-network Q-values | batches of experience | Q-learning with a neural network and replay buffer |
-
-### How To Remember
+## Repository Layout
 
 ```text
-Bellman:      the core formula: reward now + future value
-Monte Carlo:  wait for the full episode, then learn
-TD(0):        learn after one step
-n-step TD:    learn after a few steps
-SARSA:        learn Q-values using the action actually taken next
-Q-learning:   learn Q-values using the best possible next action
-DQN:          Q-learning with a neural network instead of a table
+battery-drl-agent/
+├── artifacts/
+├── config/
+├── dashboard/
+├── data/
+├── data_pipeline/
+├── environment/
+├── evaluation/
+├── models/
+├── rl/
+├── tests/
+├── training/
+├── main.py
+└── requirements.txt
 ```
 
-### Common Confusions
+## NASA Data
 
-#### State value vs action value
+Public source:
 
-```text
-V(state) = how good is this state?
-Q(state, action) = how good is this action from this state?
+- NASA Open Data catalog: https://data.nasa.gov/dataset/li-ion-battery-aging-datasets
+- NASA DASHLINK landing page: https://c3.ndc.nasa.gov/dashlink/resources/133/
+- DASHLINK source files page referenced by NASA: http://ti.arc.nasa.gov/c/5/
+
+Expected raw files:
+
+- `B0005.mat`
+- `B0006.mat`
+- `B0007.mat`
+- `B0018.mat`
+
+Put the raw `.mat` files under `data/raw/`. These four files are already downloaded and present in this repo (~15-16 MB each), extracted from the official archive at `https://phm-datasets.s3.amazonaws.com/NASA/5.+Battery+Data+Set.zip` (linked from the NASA PCoE data repository page).
+
+## Install
+
+This project shares the root-level `.venv` used by the rest of the repo.
+
+```powershell
+cd .\battery-drl-agent
+..\.venv\Scripts\python.exe -m pip install --upgrade pip
+..\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
-State values help evaluate where the agent is. Action values help the agent choose what to do.
+If `.venv` is newly created and `pip` is missing, bootstrap it first:
 
-#### Monte Carlo vs TD
-
-```text
-Monte Carlo waits until the episode ends.
-TD updates while the episode is still running.
-n-step TD waits for a few rewards, then updates.
+```powershell
+..\.venv\Scripts\python.exe -m ensurepip --upgrade
 ```
 
-An episode is one full attempt from start to terminal state, such as CartPole starting upright and ending when the pole falls.
+## Tests
 
-#### SARSA vs Q-learning
-
-```text
-SARSA target:      reward + gamma * Q(next_state, actual_next_action)
-Q-learning target: reward + gamma * max Q(next_state, all_actions)
+```powershell
+cd .\battery-drl-agent
+..\.venv\Scripts\python.exe -m pytest .\tests -q
 ```
 
-SARSA learns from what the current policy really does, including exploration. Q-learning learns as if the agent will choose the best action next.
+Both `test_battery_env.py` (reset/step behavior, reward sign on unsafe actions) and `test_replay_buffer.py` (sampling shapes) pass against the installed dependencies.
 
-## Notes About These Course Examples
+## Run Order
 
-- `montecarlo_4857.py`: the policy returns an action, but the original code passes that action into `env.step(action)` even though `step` treats the input like a state. Conceptually, this should usually be `env.step(state, action)`.
-- `sarsa-qlearning_4747.py`: the toy environment cycles `0 -> 1 -> 2 -> 0`; `action` is chosen but does not affect the next state. It is useful for formulas, not as a realistic environment.
-- `n-step_9169.py`: the function is defined but not called. It also uses `s_t = states`, but the intended starting state is probably `states[0]`.
-- `samplecode_2934.py`: updated for the installed TorchRL API: `Collector`, `spec=env.action_spec`, and `HardUpdate`.
+Run `loader.py` and `preprocessing.py` as modules from the `battery-drl-agent` folder so the `data_pipeline` package import resolves.
 
-### DQN / TorchRL Flow
+### 1. Inspect the raw dataset
 
-```mermaid
-flowchart TD
-    A[Create CartPole environment] --> B[Build neural network]
-    B --> C[Actor chooses actions]
-    C --> D[Collector gathers experience]
-    D --> E[Replay buffer stores experience]
-    E --> F[Sample mini-batch]
-    F --> G[Compute DQN loss]
-    G --> H[Optimizer updates network]
-    H --> I[Target updater stabilizes learning]
-    I --> D
+```powershell
+..\.venv\Scripts\python.exe .\data_pipeline\loader.py
 ```
 
-The big idea: DQN still uses the Bellman/Q-learning idea, but it stores Q-values inside a neural network instead of a small table.
+### 2. Preprocess the NASA data
+
+```powershell
+..\.venv\Scripts\python.exe -m data_pipeline.preprocessing
+```
+
+### 3. Train the battery-health model
+
+```powershell
+..\.venv\Scripts\python.exe -m training.train_health_model
+```
+
+### 4. Train the DQN agent
+
+```powershell
+..\.venv\Scripts\python.exe -m rl.train_dqn
+```
+
+### 5. Evaluate policies
+
+```powershell
+..\.venv\Scripts\python.exe -m evaluation.evaluate_agent
+```
+
+### 6. Launch the dashboard
+
+```powershell
+..\.venv\Scripts\python.exe -m streamlit run .\dashboard\app.py
+```
+
+## Runtime Expectations
+
+Measured on the actual NASA data in this repo (4 batteries, ~2.1M raw rows, CPU-only):
+
+| Step | Measured / estimated time |
+|---|---|
+| `loader.py` (parse `.mat` files) | ~12 s |
+| `preprocessing.py` (features + split) | ~38 s |
+| `training.train_health_model` (15 epochs) | ~10-12 min |
+| `rl.train_dqn` (120 episodes) | ~1-2 min |
+| `evaluation.evaluate_agent` | under 1 min |
+
+Total end-to-end run: roughly **15-20 minutes** on CPU. The health-model step dominates.
+
+Two tuning choices keep this practical:
+
+- `health_model.sequence_stride` in `config/config.yaml` (default `5`) samples training windows every 5 timesteps instead of every timestep, cutting ~1.17M overlapping sequences down to ~235K without losing much signal (adjacent windows are nearly identical). Lower it toward `1` for a slower, denser fit; raise it for faster iteration.
+- The `STOP` action (4) no longer ends an episode by itself. Only the environment's own safety condition (temperature at or above `critical_temp_c`) terminates an episode early; otherwise episodes run for the full `episode_horizon` (or until the replayed data runs out). This was changed because epsilon-greedy exploration was picking `STOP` roughly 1 in 5 steps early in training, which previously ended episodes after ~3 steps on average and left the agent almost no learning signal.
+
+## Model Estimation And Metrics
+
+Battery-health model metrics:
+
+- MAE for SOH
+- RMSE for SOH
+- Validation loss
+
+RL evaluation metrics:
+
+- Total reward
+- Charging or operating progress toward target SOC
+- Temperature exposure above threshold
+- Unsafe event count
+- Mean degradation risk
+- Action distribution
+
+## Interpretation Of Results
+
+The core project claim should be modest and testable:
+
+- The GRU can estimate battery condition from historical measurements.
+- The DQN can learn a policy that reduces charging stress when temperature and degradation risk rise.
+- The learned policy should be compared against simpler baselines, not judged only by reward.
+
+## Decision Support
+
+The dashboard is intended to support human interpretation. It shows:
+
+- measured battery state
+- predicted SOH and degradation risk
+- chosen RL action
+- DQN Q-values
+- time-series charts for voltage, current, temperature, SOC, SOH, risk, and actions
+
+## Why This Matters
+
+The relevance of the project is that EV energy-management systems must balance performance and asset health. Even a simplified academic simulation is useful because it shows how supervised sequence modeling and sequential decision-making can be combined in one closed loop.
+
+## Assumptions And Limits
+
+- The environment is data-driven and simplified, not electrochemical.
+- Historical NASA measurements are replayed sequentially to avoid future leakage.
+- The reward values are configurable in `config/config.yaml` and should be discussed explicitly in the report.
+- The DQN operates on a discrete action space only because this is a first prototype.
+
+## Suggested Presentation Structure
+
+If you need to align the code with the course deliverables, a compact presentation can use:
+
+1. Problem and motivation
+2. Data and preprocessing
+3. Health model and RL environment design
+4. DQN training and evaluation results
+5. Demo, limitations, and future work
+
+The course text you shared mentions both a short five-slide presentation and a longer written report. Confirm slide-count expectations with the instructor, because the written requirements appear inconsistent.
